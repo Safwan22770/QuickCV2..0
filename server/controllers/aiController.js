@@ -148,20 +148,7 @@ export const suggestJobsFromSkills = async (req, res) => {
       return res.status(400).json({ message: "Skills are required" });
     }
 
-    const prompt = `
-You are a career advisor.
-
-Analyze the following skills and suggest suitable job roles.
-
-Skills:
-${userContent}
-
-Rules:
-- Suggest exactly 5 job roles
-- Each job on a new line
-- Include a short description
-- Plain text only
-`;
+    const prompt = `You are a career advisor. Analyze the following skills and suggest 5 suitable job roles with short descriptions: ${userContent}`;
 
     const response = await ai.chat.completions.create({
       model: process.env.OPENAI_MODEL,
@@ -169,16 +156,28 @@ Rules:
     });
 
     const text = response.choices[0].message.content;
-
-    const suggestions = text
-      .split("\n")
-      .map(line => line.trim())
-      .filter(Boolean);
+    const suggestions = text.split("\n").map(line => line.trim()).filter(Boolean);
 
     res.status(200).json({ suggestions });
 
   } catch (error) {
     console.error("AI JOB ERROR:", error);
+
+    // FIX: Handle Rate Limit (429) gracefully
+    if (error.status === 429) {
+      console.warn("Rate limit hit, providing fallback job suggestions.");
+      return res.status(200).json({
+        suggestions: [
+          "Software Developer: Building and maintaining applications.",
+          "Data Analyst: Interpreting complex data sets.",
+          "Project Manager: Overseeing project timelines and teams.",
+          "UX/UI Designer: Designing user-centric interfaces.",
+          "Technical Consultant: Providing expert technology advice."
+        ],
+        isFallback: true // Let the frontend know this isn't AI generated
+      });
+    }
+
     res.status(500).json({ message: "Failed to generate job suggestions" });
   }
 };
